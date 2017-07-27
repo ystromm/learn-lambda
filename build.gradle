@@ -1,25 +1,68 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url "https://plugins.gradle.org/m2/" }
+
+    }
+    dependencies {
+        classpath "jp.classmethod.aws:gradle-aws-plugin:0.+"
+    }
+}
+
 apply plugin: 'java'
+apply plugin: "jp.classmethod.aws.lambda"
+
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    compile (
-        'com.amazonaws:aws-lambda-java-core:1.1.0',
-        'com.amazonaws:aws-lambda-java-events:1.1.0'
+    compile(
+            'com.amazonaws:aws-lambda-java-core:1.1.0',
+            'com.amazonaws:aws-lambda-java-events:1.1.0',
+            // AWS Dynamodb AWS
+            'com.amazonaws:aws-java-sdk-dynamodb:1.10.34'
     )
 }
 
 task buildZip(type: Zip) {
     from compileJava
-    from processResources              
+    from processResources
     into('lib') {
         from configurations.runtime
-    }           
+    }
 }
 
 build.dependsOn buildZip
+
+lambda {
+    region = "eu-central-1"
+}
+
+aws {
+    profileName = "default"
+}
+
+task deploy(type: AWSLambdaMigrateFunctionTask, dependsOn: build) {
+    functionName = "HelloWorld"
+    handler = "com.github.ystromm.learn_lambda.HelloWorldRequestHandler::handleRequest"
+    role = "arn:aws:iam::${aws.accountId}:role/lambda_dynamo"
+    runtime = Runtime.Java8
+    zipFile = buildZip.archivePath
+    memorySize = 128
+    timeout = 15
+}
+
+task invoke(type: AWSLambdaInvokeTask) {
+    functionName = "HelloWorld"
+    invocationType = InvocationType.RequestResponse
+    payload = '"Pia"'
+    doLast {
+        println "Lambda function result: " + new String(invokeResult.payload.array(), "UTF-8")
+    }
+}
+
 task wrapper(type: Wrapper) {
     gradleVersion = "3.5.1"
 }
